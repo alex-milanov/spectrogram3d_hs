@@ -24,25 +24,25 @@ axesStream = let mk vs c = toGPUStream LineStrip $ zip (P.map homPoint vs) (repe
                , mk [0:.0:.(-1):.(), 0:.0:.1:.(), (-0.1):.0:.0.8:.(), (-0.1):.0:.1:.()]                      (0:.0:.1:.())
                ]
 
-data State = State { s_cc :: [Float]
-                   , s_vs :: [Float]
-                   , s_max :: Float
-                   , s_avg :: Float
-                   }
+data AudioState = Mono { m_cc :: [Float]
+                       , m_vs :: [Float]
+                       , m_max :: Float
+                       , m_avg :: Float
+                       }
 wavg w a b = a*w + b*(1-w)
 
 main :: IO ()
 main = do
     GLUT.getArgsAndInitialize
     n <- getProgName
-    r <- newIORef $ State [] [] 0 0
+    r <- newIORef $ Mono [] [] 0 0
     forkFinally (audio_main n r) $ \_ -> do
         printf "%s: audio monitor thread quit\n" n
     --threadDelay $ round 1e6
     display_main n r
     printf "%s: graphics mainloop returned\n" n
 
-audio_main :: String -> IORef State -> IO ()
+audio_main :: String -> IORef AudioState -> IO ()
 audio_main n r = do
     mainStereo $ \fr -> do
         atomicModifyIORef' r $ \s -> (consumeFrame fr s, ())
@@ -52,31 +52,31 @@ audio_main n r = do
         samples = 441
         chunk = div span samples
         -- consume the frame and update state
-        consumeFrame :: (Sample, Sample) -> State -> State
+        consumeFrame :: (Sample, Sample) -> AudioState -> AudioState
         consumeFrame (CT.CFloat l, CT.CFloat r) d = update d'
             where
                 mono = (l + r) / 2 
-                d' = d { s_cc = mono : (s_cc d) }
+                d' = d { m_cc = mono : (m_cc d) }
         -- build the updated result tuple based on whether the current chunk is complete
-        update :: State -> State
+        update :: AudioState -> AudioState
         update d
             | ct >= chunk = let v = P.head cc
                                 --v = P.sum cc / (fromIntegral $ P.length cc)
                                 --v = foldl1 P.max $ P.map P.abs cc
-                                vs = P.take samples $ v : (s_vs d)
-                                max' = s_max d
-                                avg' = s_avg d
-                            in d { s_cc = []
-                                 , s_vs = vs
-                                 , s_max = wavg 0.9999 (max max' v) avg'
-                                 , s_avg = wavg 0.99 avg' (P.abs v)
+                                vs = P.take samples $ v : (m_vs d)
+                                max' = m_max d
+                                avg' = m_avg d
+                            in d { m_cc = []
+                                 , m_vs = vs
+                                 , m_max = wavg 0.9999 (max max' v) avg'
+                                 , m_avg = wavg 0.99 avg' (P.abs v)
                                  }
             | otherwise = d
             where
-                cc = s_cc d
+                cc = m_cc d
                 ct = P.length cc
 
-display_main :: String -> IORef State -> IO ()
+display_main :: String -> IORef AudioState -> IO ()
 display_main n r = do
     newWindow n (vec 0) (768:.512:.()) (displayIO r) initWindow
     GLUT.mainLoop
@@ -90,16 +90,16 @@ display_main n r = do
         onKeyMouse (GLUT.Char '\ESC') GLUT.Down _ _ = GLUT.leaveMainLoop
         onKeyMouse _ _ _ _ = return ()
 
-displayIO :: IORef State -> Vec2 Int -> IO (FrameBuffer RGBFormat DepthFormat ())
+displayIO :: IORef AudioState -> Vec2 Int -> IO (FrameBuffer RGBFormat DepthFormat ())
 displayIO r size = do
     rs <- mkRenderState size
     d <- readIORef r
-    let ct = fromIntegral $ P.length (s_vs d)
+    let ct = fromIntegral $ P.length (m_vs d)
         xs = [0.5 - x | x <- [0,1 / (ct-1)..1]]
-    let gmax = toGPU $ s_max d
-        gavg = toGPU $ s_avg d
-    printf "overall max %.2f | running avg %.2f\n" (s_max d) (s_avg d)
-    let stream = toGPUStream LineStrip $ zip xs (s_vs d) -- too big or too small!
+    let gmax = toGPU $ m_max d
+        gavg = toGPU $ m_avg d
+    --printf "overall max %.2f | running avg %.2f\n" (m_max d) (m_avg d)
+    let stream = toGPUStream LineStrip $ zip xs (m_vs d) -- too big or too small!
         normmax = fmap (\(x, y) -> (x, y/gmax/2)) stream
         normavg = fmap (\(x, y) -> (x, y/gavg/2)) stream
     threadDelay $ round 1e4
