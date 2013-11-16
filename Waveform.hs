@@ -29,14 +29,16 @@ data AudioState = Mono { m_cc :: [Float]
                        , m_max :: Float
                        , m_avg :: Float
                        }
+
+wavg :: Num n => n -> n -> n -> n
 wavg w a b = a*w + b*(1-w)
 
 main :: IO ()
 main = do
-    GLUT.getArgsAndInitialize
+    _ <- GLUT.getArgsAndInitialize
     n <- getProgName
     r <- newIORef $ Mono [] [] 0 0
-    forkFinally (audio_main n r) $ \_ -> do
+    _ <- forkFinally (audio_main n r) $ \_ -> do
         printf "%s: audio monitor thread quit\n" n
     --threadDelay $ round 1e6
     display_main n r
@@ -48,9 +50,9 @@ audio_main n r = do
         atomicModifyIORef' r $ \s -> (consumeFrame fr s, ())
         return fr
     where
-        span = div 44100 4
+        sspan = div 44100 4
         samples = 441
-        chunk = div span samples
+        chunk = div sspan samples
         -- consume the frame and update state
         consumeFrame :: (Sample, Sample) -> AudioState -> AudioState
         consumeFrame (CT.CFloat l, CT.CFloat r) d = update d'
@@ -140,13 +142,13 @@ mkFrags :: CPUMatrix -> Instance Float p (VertexPosition, VertexRGB)
         -> FragmentStream (Color RGBFormat (Fragment Float)) 
 mkFrags world2clip i = fmap RGB
                      $ rasterizeFront
-                     $ fmap (vs $ toGPU model2clip)
+                     $ fmap (vShdr $ toGPU model2clip)
                      $ instStream i
     where
         model2world = instWorldMatrix i
         model2clip = multmm world2clip model2world
 
-vs :: VertexMatrix -> (VertexPosition, VertexRGB) -> (VertexPosition, VertexRGB)
-vs model2clip (p, c) = (multmv model2clip p, c)
+vShdr :: VertexMatrix -> (VertexPosition, VertexRGB) -> (VertexPosition, VertexRGB)
+vShdr model2clip (p, c) = (multmv model2clip p, c)
 
 -- eof
