@@ -13,3 +13,4 @@ executable waveform
   main-is:             Waveform.hs
   build-depends:       base >=4.6, GLUT >=2.5, Vec >=1.0, GPipe >=1.4, jack >=0.7, audio-reactive-gfx
   default-language:    Haskell2010
+  ghc-options:         -Wall -threaded
