@@ -1,9 +1,10 @@
 import System.Environment (getProgName)
 import Control.Concurrent (forkFinally, threadDelay)
 import Text.Printf (printf)
-import Data.IORef (IORef, newIORef, atomicModifyIORef', readIORef)
+import Data.IORef (IORef, newIORef, atomicModifyIORef', readIORef, modifyIORef)
 import Sound.JACK.Audio (mainStereo, Sample)
 import Data.Monoid (mconcat)
+import Data.Time.Clock (utctDayTime, getCurrentTime)
 
 import qualified Foreign.C.Types as CT
 import qualified Graphics.UI.GLUT as GLUT
@@ -38,19 +39,36 @@ main = do
     _ <- GLUT.getArgsAndInitialize
     n <- getProgName
     r <- newIORef $ Mono [] [] 0 0
-    _ <- forkFinally (audio_main n r) $ \_ -> do
+    r2 <- newIORef 0
+    _ <- forkFinally (audio_main n r r2) $ \_ -> do
         printf "%s: audio monitor thread quit\n" n
     --threadDelay $ round 1e6
     display_main n r
     printf "%s: graphics mainloop returned\n" n
 
-audio_main :: String -> IORef AudioState -> IO ()
-audio_main n r = do
+audio_main :: String -> IORef AudioState -> IORef Integer -> IO ()
+audio_main n r r2 = do
     mainStereo $ \fr -> do
+
+        let hz = 100
+            amp = 1
+
+--      ct <- readIORef r2
+--      modifyIORef r2 (+ 1)
+--         let samplesPerSec = 44100
+--             sec = div ct samplesPerSec
+-- 
+--         let nsin = sin . (2 * pi *) -- sine of a normalized argument
+--             dur = round (44100 / hz)
+--             loop = mod ct dur -- 0..dur
+--             lf = fromIntegral loop / fromIntegral dur -- 0..1
+--             v = amp * nsin lf
+--             fr = (CT.CFloat v, CT.CFloat v)
+
         atomicModifyIORef' r $ \s -> (consumeFrame fr s, ())
         return fr
     where
-        sspan = div 44100 4
+        sspan = div 44100 3
         samples = 441
         chunk = div sspan samples
         -- consume the frame and update state
@@ -70,7 +88,7 @@ audio_main n r = do
                                 avg' = m_avg d
                             in d { m_cc = []
                                  , m_vs = vs
-                                 , m_max = wavg 0.9999 (max max' v) avg'
+                                 , m_max = wavg 0.999 (max max' $ P.abs v) avg'
                                  , m_avg = wavg 0.99 avg' (P.abs v)
                                  }
             | otherwise = d
@@ -98,23 +116,24 @@ displayIO r size = do
     d <- readIORef r
     let ct = fromIntegral $ P.length (m_vs d)
         xs = [0.5 - x | x <- [0,1 / (ct-1)..1]]
-    let gmax = toGPU $ m_max d
-        gavg = toGPU $ m_avg d
+    let gmax = toGPU $ clamp 0 0.8 (m_max d)
+        gavg = toGPU $ clamp 0 0.8 (m_avg d)
     --printf "overall max %.2f | running avg %.2f\n" (m_max d) (m_avg d)
     let stream = toGPUStream LineStrip $ zip xs (m_vs d) -- too big or too small!
         normmax = fmap (\(x, y) -> (x, y/gmax/2)) stream
         normavg = fmap (\(x, y) -> (x, y/gavg/2)) stream
     threadDelay $ round 1e4
-    return $ display rs normmax
+    return $ display rs normmax (m_max d)
 
-display :: RenderState Float -> PrimitiveStream Line (Vertex Float, Vertex Float) -> FrameBuffer RGBFormat DepthFormat ()
-display rs wav = P.foldl (flip draw) cleared
+display :: RenderState Float -> PrimitiveStream Line (Vertex Float, Vertex Float) -> Float -> FrameBuffer RGBFormat DepthFormat ()
+display rs wav max = P.foldl (flip draw) cleared
            $ let f = P.map (mkFrags world2clip)
              in f trs ++ f lns ++ f pts
     where
+        loud = max / 0.8
         sec = rsSeconds rs
         draw = paintColorRastDepth Less True NoBlending (RGB $ vec True)
-        cleared = newFrameBufferColorDepth (RGB $ vec 1) 1
+        cleared = newFrameBufferColorDepth (RGB $ 1:.(1 - loud):.(1 - loud):.()) 1
 
         cam = let a = easeMiddUpDownUp sec 16 `onRange` (1, -1)
                   b = easeThereAndBack sec 16 `onRange` (1, 1.75)
