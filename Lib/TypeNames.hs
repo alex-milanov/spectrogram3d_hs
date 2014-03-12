@@ -1,4 +1,10 @@
-module Lib.TypeNames where
+module Lib.TypeNames
+( CPUMatrix
+, VertexMatrix
+, VertexPosition
+, VertexRGB
+, VertexRGBA
+) where
 
 import Graphics.GPipe (Vertex, VertexPosition)
 import Data.Vec
@@ -8,3 +14,4 @@ type VertexMatrix = Mat44 (Vertex Float)
 
 -- VertexPosition
 type VertexRGB = Vec3 (Vertex Float)
+type VertexRGBA = Vec4 (Vertex Float)

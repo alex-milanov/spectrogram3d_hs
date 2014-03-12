@@ -5,12 +5,37 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  build-depends:       base >=4.6, GLUT >=2.3, Vec >=1.0, GPipe >=1.4
-  exposed-modules:     Lib.AnimUtils, Lib.Instance, Lib.RenderState, Lib.TypeNames
+  build-depends:       base  >=4.6,
+                       Vec   >=1.0.1,
+                       GPipe >=1.4.3,
+                       GLUT  >=2.3.0,
+                       vector     >=0.10.9,
+                       containers >=0.5.0,
+                       jack       >=0.7,
+                       arb-fft    >=0.2.0,
+                       mtl        >=2.1.2
+  exposed-modules:     Lib.TypeNames,
+                       Lib.RenderState,
+                       Lib.AnimUtils,
+                       Lib.Instance,
+                       Sound.Signal.Util,
+                       Sound.Signal.FFT,
+                       Sound.Signal.Input.Sampler,
+                       Sound.Signal.Input.Channel
+  other-modules:       Audiomain
   default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -fno-warn-unused-do-bind
 
 executable waveform
   main-is:             Waveform.hs
-  build-depends:       base >=4.6, GLUT >=2.3, Vec >=1.0, GPipe >=1.4, jack >=0.7, time >=1.4.0.1, audio-reactive-gfx
+  build-depends:       GPipe      >=1.4.3,
+                       Vec        >=1.0.1,
+                       base       >=4.6,
+                       GLUT       >=2.3.0,
+                       containers >=0.5.0,
+                       jack       >=0.7,
+                       netwire    >=5.0.0,
+                       vector     >=0.10.9,
+                       arb-fft    >=0.2.0
   default-language:    Haskell2010
-  ghc-options:         -Wall -threaded
+  ghc-options:         -Wall -threaded -fno-warn-unused-do-bind

@@ -1,16 +1,25 @@
-import System.Environment (getProgName)
-import Control.Concurrent (forkFinally, threadDelay)
+import System.Environment (getProgName, getArgs)
+import Control.Concurrent (forkFinally) -- , threadDelay)
 import Text.Printf (printf)
-import Data.IORef (IORef, newIORef, atomicModifyIORef', readIORef, modifyIORef)
-import Sound.JACK.Audio (mainStereo, Sample)
+import Data.IORef (IORef, newIORef, atomicModifyIORef', readIORef) -- , modifyIORef)
 import Data.Monoid (mconcat)
-import Data.Time.Clock (utctDayTime, getCurrentTime)
 
-import qualified Foreign.C.Types as CT
 import qualified Graphics.UI.GLUT as GLUT
+import qualified Control.Exception as Except
+
+import qualified Data.Vector as Vector
+import Data.Vector (Vector)
+
+import qualified Data.Sequence as Seq
+import Data.Sequence (Seq, (<|))
+
+import qualified Audiomain
+import Audiomain (AudioState, audio_main)
+
+import qualified Data.Foldable as Foldable
 
 import Prelude as P
-import Data.Vec
+import Data.Vec as Vec hiding (toList)
 import Graphics.GPipe
 
 import Lib.AnimUtils
@@ -18,87 +27,60 @@ import Lib.RenderState
 import Lib.Instance
 import Lib.TypeNames
 
-axesStream :: PrimitiveStream Line (VertexPosition, VertexRGB)
+import qualified Stats
+
+axesStream :: PrimitiveStream Line (VertexPosition, VertexRGBA)
 axesStream = let mk vs c = toGPUStream LineStrip $ zip (P.map homPoint vs) (repeat c)
-    in mconcat [ mk [(-1):.0:.0:.(), 1:.0:.0:.(), 0.8:.(-0.1):.0:.(), 0.8:.0:.0:.(), 1:.(-0.1):.0:.()]       (1:.0:.0:.())
-               , mk [0:.(-1):.0:.(), 0:.1:.0:.(), 0:.0.8:.(-0.1):.(), 0:.0.9:.(-0.05):.(), 0:.1:.(-0.1):.()] (0:.1:.0:.())
-               , mk [0:.0:.(-1):.(), 0:.0:.1:.(), (-0.1):.0:.0.8:.(), (-0.1):.0:.1:.()]                      (0:.0:.1:.())
+    in mconcat [ mk [(-1):.0:.0:.(), 1:.0:.0:.(), 0.8:.(-0.1):.0:.(), 0.8:.0:.0:.(), 1:.(-0.1):.0:.()]       (1:.0:.0:.1:.())
+               , mk [0:.(-1):.0:.(), 0:.1:.0:.(), 0:.0.8:.(-0.1):.(), 0:.0.9:.(-0.05):.(), 0:.1:.(-0.1):.()] (0:.1:.0:.1:.())
+               , mk [0:.0:.(-1):.(), 0:.0:.1:.(), (-0.1):.0:.0.8:.(), (-0.1):.0:.1:.()]                      (0:.0:.1:.1:.())
                ]
 
-data AudioState = Mono { m_cc :: [Float]
-                       , m_vs :: [Float]
-                       , m_max :: Float
-                       , m_avg :: Float
-                       }
+type Stream = PrimitiveStream Line (Vertex Float, Vertex Float)
+type DisplayState = (Float, Float, Seq Stream)
 
-wavg :: Num n => n -> n -> n -> n
-wavg w a b = a*w + b*(1-w)
+type Stream2 = PrimitiveStream Line (VertexPosition, VertexRGBA)
+
+args :: IO (Int, Int)
+args = do
+    argv <- getArgs
+    tup@(stride, offset) <- parse argv
+    printf "Stride: %d\n" stride
+    printf "Offset: %d\n" offset
+    return tup
+    where
+        parse :: [String] -> IO (Int, Int)
+        parse v@[s1, s2] = do
+            printf "Reading two ints.. %s\n" (show v)
+            return (read s1, read s2)
+        parse _ = do
+            printf "Using defaults..\n"
+            return (512, 512)
 
 main :: IO ()
 main = do
-    _ <- GLUT.getArgsAndInitialize
+    GLUT.getArgsAndInitialize
+    (stride, offset) <- args
     n <- getProgName
-    r <- newIORef $ Mono [] [] 0 0
-    r2 <- newIORef 0
-    _ <- forkFinally (audio_main n r r2) $ \_ -> do
-        printf "%s: audio monitor thread quit\n" n
-    --threadDelay $ round 1e6
-    display_main n r
-    printf "%s: graphics mainloop returned\n" n
+    r <- newIORef (Audiomain.initial stride)
 
-audio_main :: String -> IORef AudioState -> IORef Integer -> IO ()
-audio_main n r r2 = do
-    mainStereo $ \fr -> do
+    -- audio thread
+    forkFinally (audio_main r stride offset) $ \me -> case me of
+        Left e -> printf "audio monitor thread crashed (%s)\n" (show e)
+        Right _ -> printf "audio monitor thread finished\n"
 
-        let hz = 100
-            amp = 1
-
---      ct <- readIORef r2
---      modifyIORef r2 (+ 1)
---         let samplesPerSec = 44100
---             sec = div ct samplesPerSec
--- 
---         let nsin = sin . (2 * pi *) -- sine of a normalized argument
---             dur = round (44100 / hz)
---             loop = mod ct dur -- 0..dur
---             lf = fromIntegral loop / fromIntegral dur -- 0..1
---             v = amp * nsin lf
---             fr = (CT.CFloat v, CT.CFloat v)
-
-        atomicModifyIORef' r $ \s -> (consumeFrame fr s, ())
-        return fr
+    -- display thread
+    r3 <- newIORef (fromIntegral stride, 1, Seq.empty)
+    Except.catch (display_main n r r3 displayct) $ \e -> do
+        printf "graphics mainloop crashed (%s)\n" (show (e::Except.SomeException))
+    printf "graphics mainloop finished\n"
     where
-        sspan = div 44100 3
-        samples = 441
-        chunk = div sspan samples
-        -- consume the frame and update state
-        consumeFrame :: (Sample, Sample) -> AudioState -> AudioState
-        consumeFrame (CT.CFloat l, CT.CFloat r) d = update d'
-            where
-                mono = (l + r) / 2 
-                d' = d { m_cc = mono : (m_cc d) }
-        -- build the updated result tuple based on whether the current chunk is complete
-        update :: AudioState -> AudioState
-        update d
-            | ct >= chunk = let v = P.head cc
-                                --v = P.sum cc / (fromIntegral $ P.length cc)
-                                --v = foldl1 P.max $ P.map P.abs cc
-                                vs = P.take samples $ v : (m_vs d)
-                                max' = m_max d
-                                avg' = m_avg d
-                            in d { m_cc = []
-                                 , m_vs = vs
-                                 , m_max = wavg 0.999 (max max' $ P.abs v) avg'
-                                 , m_avg = wavg 0.99 avg' (P.abs v)
-                                 }
-            | otherwise = d
-            where
-                cc = m_cc d
-                ct = P.length cc
+        displayct :: Int
+        displayct = 40 -- how many ffts to display on the screen
 
-display_main :: String -> IORef AudioState -> IO ()
-display_main n r = do
-    newWindow n (vec 0) (768:.512:.()) (displayIO r) initWindow
+display_main :: String -> IORef AudioState -> IORef DisplayState -> Int -> IO ()
+display_main n r r3 displayct = do
+    newWindow n (vec 0) (768:.512:.()) (displayIO r r3 displayct) initWindow
     GLUT.mainLoop
     where
         initWindow :: GLUT.Window -> IO ()
@@ -110,56 +92,110 @@ display_main n r = do
         onKeyMouse (GLUT.Char '\ESC') GLUT.Down _ _ = GLUT.leaveMainLoop
         onKeyMouse _ _ _ _ = return ()
 
-displayIO :: IORef AudioState -> Vec2 Int -> IO (FrameBuffer RGBFormat DepthFormat ())
-displayIO r size = do
-    rs <- mkRenderState size
-    d <- readIORef r
-    let ct = fromIntegral $ P.length (m_vs d)
-        xs = [0.5 - x | x <- [0,1 / (ct-1)..1]]
-    let gmax = toGPU $ clamp 0 0.8 (m_max d)
-        gavg = toGPU $ clamp 0 0.8 (m_avg d)
-    --printf "overall max %.2f | running avg %.2f\n" (m_max d) (m_avg d)
-    let stream = toGPUStream LineStrip $ zip xs (m_vs d) -- too big or too small!
-        normmax = fmap (\(x, y) -> (x, y/gmax/2)) stream
-        normavg = fmap (\(x, y) -> (x, y/gavg/2)) stream
-    threadDelay $ round 1e4
-    return $ display rs normmax (m_max d)
 
-display :: RenderState Float -> PrimitiveStream Line (Vertex Float, Vertex Float) -> Float -> FrameBuffer RGBFormat DepthFormat ()
-display rs wav max = P.foldl (flip draw) cleared
+displayIO :: IORef AudioState -> IORef DisplayState -> Int -> Vec2 Int -> IO (FrameBuffer RGBAFormat DepthFormat ())
+displayIO r r3 displayct size = do
+    rs <- mkRenderState size
+    au <- readIORef r
+    (freq_max, amp_max, ds) <- atomicModifyIORef' r3 (maybe_displaylist au displayct)
+    printf "Freqmax: %f, Ampmax: %f\n" freq_max amp_max
+    let yscale = toGPU $ height / amp_max :: Vertex Float
+    return $ display rs (Seq.mapWithIndex (stream_prep yscale displayct) ds)
+    where
+        height = 0.8
+
+-- Conditionally update the display list when an fft has occurred.
+maybe_displaylist :: AudioState -> Int ->DisplayState -> (DisplayState, DisplayState)
+maybe_displaylist au displayct displaystate_ = (displaystate, displaystate)
+    where
+        displaystate = maybe displaystate_
+                       (displaylist displayct displaystate_)
+                       (Audiomain.m_fft au)
+                       -- (Just . Vector.fromList . Foldable.toList $ m_vs au)
+
+-- Given an FFT, generate a new display list.
+displaylist :: Int -> DisplayState -> Vector Float -> DisplayState
+displaylist displayct (fmax_, amax_, streams_) disp_ = (fmax, amax, streams)
+    where
+        -- update the maximum interesting frequency
+        -- limit display to the frequencies which are interesting
+        fmax = learn_freqmax fmax_ disp_
+        disp = Vector.take (round fmax) disp_
+        -- maximum magnitude (amplitude) among frequencies (used to vertical-scale the display)
+        --amax = mix smax_ (Vector.maximum disp) 0.005
+        aavg = Vector.sum disp / fromIntegral (Vector.length disp)
+        amax = let dispmax = if Vector.null disp then amax_ else Vector.maximum disp
+               in mix (max amax_ dispmax) aavg 0.005
+        -- wavg 0.999 (max max' $ P.abs v) avg'
+        -- x values for the line segments in the stream
+        xs = let len = Vector.length disp
+                 x idx = mix (-0.5) (0.5) (fromIntegral idx / fromIntegral len)
+             in P.map x ([0..] :: [Int])
+        -- combine x values with y and make a gpu stream
+        stream = toGPUStream LineStrip . zip xs . Foldable.toList $ disp
+        -- attach this stream to the state
+        streams = Seq.take displayct (stream <| streams_)
+
+-- Shift, scale, and color a stream of (x, y) with its index, to a stream of (VertexInput, VertexRGBA)
+stream_prep :: Vertex Float -> Int -> Int -> Stream -> Stream2
+stream_prep yscale displayct idx strm = fmap f strm
+    where
+        old = toGPU $ fromIntegral idx / fromIntegral displayct :: Vertex Float
+        -- SHADER
+        f (x, y_) = let y = (sin (pi * old) * (-1) * 0.5) + (y_ * yscale)
+                        z = mix 0.5 (-5) old
+                        a = mix 1 0.01 old
+                   in (homPoint $ x:.y:.z:.(), 0:.0:.0:.a:.())
+
+learn_freqmax :: Float -> Vector Float -> Float
+learn_freqmax fmax_ v = if Vector.null fariv
+                        then fmax_
+                        else mix fmax_ (fromIntegral $ Vector.last fariv) 0.05
+                        -- fromIntegral $ Vector.length v
+    where
+        mu = Stats.mean v
+        sd = Stats.stddev v
+        far = Stats.far (Stats.StdDev sd) (Stats.Mean mu) 1
+        fariv = Vector.findIndices (==True) $ Vector.map far v
+
+display :: RenderState Float -> Seq Stream2 -> FrameBuffer RGBAFormat DepthFormat ()
+display rs wavs = P.foldl (flip draw) cleared
            $ let f = P.map (mkFrags world2clip)
              in f trs ++ f lns ++ f pts
     where
-        loud = max / 0.8
         sec = rsSeconds rs
-        draw = paintColorRastDepth Less True NoBlending (RGB $ vec True)
-        cleared = newFrameBufferColorDepth (RGB $ 1:.(1 - loud):.(1 - loud):.()) 1
+        blend = Blend (FuncAdd, FuncAdd)
+                      ((SrcAlpha, OneMinusSrcAlpha), (One, Zero))
+                      (RGBA (vec 1) 1)
+        draw = paintColorRastDepth Less True blend (RGBA (vec True) True)
+        cleared = newFrameBufferColorDepth (RGBA (vec 1) 1) 1
 
         cam = let a = easeMiddUpDownUp sec 16 `onRange` (1, -1)
                   b = easeThereAndBack sec 16 `onRange` (1, 1.75)
-              in a:.0.4:.b:.()
+              in a:.0.6:.b:.()
 
         cam2clip = let zNear = 0.01
                        zFar = 1000
                        fovDeg = 45
                    in perspective zNear zFar (fovDeg * pi / 180) (rsAspectRatio rs)
         world2cam = let up = 0:.1:.0:.()
-                        tgt = (easeMiddUpDownUp sec 16 `onRange` (0.2, -0.2)):.0.05:.0:.()
+                        tgt = (easeMiddUpDownUp sec 16 `onRange` (0.2, -0.2)):.0.2:.0:.()
                     in multmm (transpose $ rotationLookAt up cam tgt) (translation $ -cam)
         world2clip = multmm cam2clip world2cam 
 
         trs = []
         lns = [ Instance (vec 1) [] (vec 0) Nothing axesStream
+              , Instance (vec 0.1) [] (0:.0.1:.0.5:.()) Nothing axesStream
               , let s = 2:.0.5:.1:.()
                     r = []
-                    t = 0:.(0.1):.(-0.05):.()
-                in Instance s r t Nothing $ fmap (\(x,y) -> (homPoint $ x:.y:.0:.(), vec 0)) wav
+                    t = 0:.(-0.1):.(-0.05):.()
+                in Instance s r t Nothing . mconcat . Foldable.toList $ wavs
               ]
         pts = []
 
-mkFrags :: CPUMatrix -> Instance Float p (VertexPosition, VertexRGB)
-        -> FragmentStream (Color RGBFormat (Fragment Float)) 
-mkFrags world2clip i = fmap RGB
+mkFrags :: CPUMatrix -> Instance Float p (VertexPosition, VertexRGBA)
+        -> FragmentStream (Color RGBAFormat (Fragment Float)) 
+mkFrags world2clip i = fmap (\rgba -> RGBA (Vec.take n3 rgba) (Vec.last rgba))
                      $ rasterizeFront
                      $ fmap (vShdr $ toGPU model2clip)
                      $ instStream i
@@ -167,7 +203,7 @@ mkFrags world2clip i = fmap RGB
         model2world = instWorldMatrix i
         model2clip = multmm world2clip model2world
 
-vShdr :: VertexMatrix -> (VertexPosition, VertexRGB) -> (VertexPosition, VertexRGB)
+vShdr :: VertexMatrix -> (VertexPosition, VertexRGBA) -> (VertexPosition, VertexRGBA)
 vShdr model2clip (p, c) = (multmv model2clip p, c)
 
 -- eof
