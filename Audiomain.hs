@@ -1,5 +1,19 @@
 {-# LANGUAGE RecordWildCards #-}
-module Audiomain where
+module AudioMain where
+
+-- Recommended import
+--import qualified AudioMain
+--import AudioMain (AudioState, audio_main)
+
+-- qualified
+
+import qualified GHC.Float
+import qualified Data.Foldable as Foldable
+import qualified Foreign.C.Types as CTypes
+import qualified Sound.Signal.FFT as FFT
+import qualified Sound.JACK.Audio as JACK
+
+-- mixed
 
 import qualified Data.Sequence as Seq
 import Data.Sequence (Seq, (<|))
@@ -10,21 +24,18 @@ import Data.Vector (Vector)
 import qualified Data.IORef as IORef
 import Data.IORef (IORef)
 
-import qualified GHC.Float
-import qualified Data.Foldable as Foldable
-import qualified Foreign.C.Types as CTypes
-import qualified Sound.Signal.FFT as FFT
-import qualified Sound.JACK.Audio as JACK
+-- unqualified
 
 import Text.Printf (printf)
 
 type JackFrame = (JACK.Sample, JACK.Sample)
 type Frame = Float
 
-data AudioState = Mono { m_vs :: !(Seq Float)
-                       , m_fftct :: !Int
-                       , m_fft :: !(Maybe (Vector Float))
-                       }
+data AudioState = Mono
+                  { m_vs :: !(Seq Float)
+                  , m_fftct :: !Int
+                  , m_fft :: !(Maybe (Vector Float))
+                  }
     deriving (Show)
 
 initial :: Int -> AudioState

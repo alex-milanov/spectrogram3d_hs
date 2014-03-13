@@ -22,12 +22,13 @@ library
                        Sound.Signal.FFT,
                        Sound.Signal.Input.Sampler,
                        Sound.Signal.Input.Channel
-  other-modules:       Audiomain
+  other-modules:       AudioMain,
+                       DisplayMain
   default-language:    Haskell2010
   ghc-options:         -Wall -threaded -fno-warn-unused-do-bind
 
-executable waveform
-  main-is:             Waveform.hs
+executable spectrogram
+  main-is:             Spectrogram.hs
   build-depends:       GPipe      >=1.4.3,
                        Vec        >=1.0.1,
                        base       >=4.6,
