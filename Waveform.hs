@@ -110,8 +110,8 @@ maybe_displaylist au displayct displaystate_ = (displaystate, displaystate)
     where
         displaystate = maybe displaystate_
                        (displaylist displayct displaystate_)
-                       (Audiomain.m_fft au)
-                       -- (Just . Vector.fromList . Foldable.toList $ m_vs au)
+                       --(Audiomain.m_fft au)
+                       (Just . Vector.fromList . Foldable.toList $ Audiomain.m_vs au)
 
 -- Given an FFT, generate a new display list.
 displaylist :: Int -> DisplayState -> Vector Float -> DisplayState
@@ -148,10 +148,10 @@ stream_prep yscale displayct idx strm = fmap f strm
                    in (homPoint $ x:.y:.z:.(), 0:.0:.0:.a:.())
 
 learn_freqmax :: Float -> Vector Float -> Float
-learn_freqmax fmax_ v = if Vector.null fariv
-                        then fmax_
-                        else mix fmax_ (fromIntegral $ Vector.last fariv) 0.05
-                        -- fromIntegral $ Vector.length v
+learn_freqmax fmax_ v = -- if Vector.null fariv
+                        -- then fmax_
+                        -- else mix fmax_ (fromIntegral $ Vector.last fariv) 0.05
+                        fromIntegral $ Vector.length v
     where
         mu = Stats.mean v
         sd = Stats.stddev v
