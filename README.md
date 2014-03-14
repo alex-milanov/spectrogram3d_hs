@@ -11,7 +11,7 @@ There are lots of dependencies. I'll write up a guide through the cabal hell soo
 * Structure
   1. The main spawns a thread which hooks into JACK and accumulates audio samples. Every `offset::Int` samples it generates an FFT using `stride::Int` samples as input. In the first few FFTs the stride has been initialized with zeros.
   2. The main then enters a GLUT mainloop which reads an `IORef` in its display function and accumulates FFTs. FFTs are projected into 3D using the [programmable graphics pipeline](http://www.arcsynthesis.org/gltut/).
-* The FFT is a pure (no mutation) pure-Haskell (not bindings to another language) implementation from the [`arb-fft`](http://hackage.haskell.org/package/arb-fft) package written by Ian Ross [[blag]](http://www.skybluetrades.net/haskell-fft-index.html). It's fast enough.
+* The FFT is a pure (no mutation) pure-Haskell (not bindings to another language) implementation from the [`arb-fft`](http://hackage.haskell.org/package/arb-fft) package written by Ian Ross [[blag]](http://www.skybluetrades.net/haskell-fft-index.html). Haskell is fast.
 * The OpenGL vertex and fragment shaders are written in Haskell and compiled down to GLSL in [GPipe [1]](https://github.com/tobbebex/GPipe) [[2]](http://hackage.haskell.org/package/GPipe) written by Tobias Bexelius.
 * All graphics are expressed in a pure and functional pipeline using GPipe. I still don't know any OpenGL API functions, for better or worse.
 
