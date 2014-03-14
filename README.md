@@ -2,8 +2,7 @@
 
 A realtime 3D spectrogram written in Haskell. Takes sound from JACK, and draws a mesh with GPipe.
 
-* There are lots of dependencies. I'll write up a guide through cabal hell soon.
-* I'll clean up the code with `Control.Wire` soon hopefully too.
+There are lots of dependencies. I'll write up a guide through cabal hell soon.
 
 ## usage
 
@@ -20,7 +19,7 @@ done.
 ...
 ```
 
-Start it with two numbers to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
+Start it with two numbers (no more, no less!) to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
 
 ```
 $ ./dist/build/waveform/waveform 1024 256

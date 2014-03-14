@@ -98,9 +98,9 @@ displayIO :: DisplayConf -> IORef DisplayState -> IORef AudioState -> Vec2 Int -
 displayIO dispconf rdispst raudst size = do
     rendst <- mkRenderState size
     -- feed the fft into the display state
-    AudioMain.Mono {m_fft=fft} <- IORef.readIORef raudst
+    AudioMain.Mono {m_fft=fft, m_ampavg=m_ampavg, m_fftct=m_fftct} <- IORef.readIORef raudst
     dispst@Dynamic {..} <- IORef.atomicModifyIORef' rdispst (split $ consume_fft dispconf fft)
-    printf "ds_ampmax: %f, ds_reqmax: %f\n" ds_ampmax ds_freqmax
+--  printf "ds_ampmax: %3.3f, ds_freqmax: %3.2f, m_ampavg: %.6f, m_fftct: %d\n" ds_ampmax ds_freqmax m_ampavg m_fftct
     -- update screen
     return . display rendst . prep_displaylist dispconf $ dispst
 
@@ -118,15 +118,15 @@ consume_fft (Static {..}) (Just fft_) (Dynamic {..}) =
             }
     where
         -- update the maximum interesting frequency
-        freqmax = maybe (error $ printf "learn_freqmax %f $ %s" ds_freqmax $ show fft_)
+        freqmax = maybe (error $ printf "learn_freqmax %f $ fft_=%s" ds_freqmax $ show fft_)
                         id
                         (learn_freqmax ds_freqmax fft_)
         -- limit display to the frequencies which are interesting
         fft = Vector.take (round freqmax) fft_
         -- update the maximum amplitude among frequencies to scale the display vertically
-        ampmax = maybe (error $ printf "learn_ampmax %f $ %s" ds_ampmax $ show fft)
+        ampmax = maybe (error $ printf "learn_ampmax %f $ fft=%s" ds_ampmax $ show fft)
                        id
-                       (learn_ampmax ds_ampmax fft)
+                       (learn_ampmax ds_ampmax fft) -- FIXME: should this be abs?
         -- x values for the line segments in the stream
         xs = let len = Vector.length fft
                  x idx = mix (-0.5) (0.5) (fromIntegral idx / fromIntegral len) -- FIXME: can len be zero?
@@ -141,7 +141,7 @@ learn_ampmax :: Float -> Vector Float -> Maybe Float
 learn_ampmax amax_ v = do
     vmu <- Stats.mean v
     vmax <- Stats.maximum v
-    return $ mix (max amax_ vmax) vmu 0.01
+    return $ mix (max amax_ vmax) vmu 0.001
 
 -- learn the maximum index which is far from the stddev of the vector; decay toward zeno-zero
 learn_freqmax :: Float -> Vector Float -> Maybe Float
@@ -152,7 +152,7 @@ learn_freqmax fmax_ v = do -- fromIntegral $ Vector.length v
         fariv = Vector.findIndices (far 1) v
     Monad.guard (not $ Vector.null fariv)
     let farivmax = fromIntegral $ Vector.last fariv
-    return $ mix (max fmax_ farivmax) (fmax_ / 2) 0.01
+    return $ mix (max fmax_ farivmax) (fmax_ / 2) 0.0065
     -- mix fmax_ (fromIntegral $ Vector.last fariv) 0.05 -- this one has a saner decay, but grows too slowly
 
 -- prep each of the fft lines in the display state
@@ -160,6 +160,10 @@ prep_displaylist :: DisplayConf -> DisplayState -> Seq DisplayStream
 prep_displaylist (Static {..}) (Dynamic {..}) = Seq.mapWithIndex prep_fft' ds_ffts
     where
         ampmax = toGPU $ ds_ampmax
+        -- FIXME: 1. ampmax here in the yscale calculation is kind of unnecessary
+        --           if audio is normalized before fft because ffts will all have same height ..
+        --               eg. i can replace it right now with 22 and the height in the visualizer is fine
+        --        2. it's still important for the coloring function though
         yscale = toGPU $ dc_lineheight / ds_ampmax
         prep_fft' = prep_fft ampmax yscale dc_linect
 
@@ -173,8 +177,8 @@ prep_fft ampmax yscale linect index stream = fmap prep stream
         prep (x, y_) = let swoop = 0.5 * (-1) * sin (pi * distance)
                            y = swoop + (y_ * yscale)
                            z = mix 0.5 (-5) distance
-                           r = mix 0 1 (y / ampmax)
-                           a = mix 1 0.1 distance
+                           r = mix 0 1 (y_ / ampmax)
+                           a = mix 1 0.01 distance
                        in (homPoint $ x:.y:.z:.(), r:.0:.0:.a:.())
 
 axesStream :: PrimitiveStream Line (VertexPosition, VertexRGBA)
