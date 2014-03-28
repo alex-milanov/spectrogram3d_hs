@@ -98,7 +98,8 @@ displayIO :: DisplayConf -> IORef DisplayState -> IORef AudioState -> Vec2 Int -
 displayIO dispconf rdispst raudst size = do
     rendst <- mkRenderState size
     -- feed the fft into the display state
-    AudioMain.Mono {m_fft=fft, m_ampavg=m_ampavg, m_fftct=m_fftct} <- IORef.readIORef raudst
+    AudioMain.Mono {m_fft=fft, m_ampavg=m_ampavg, m_fftct=m_fftct} <- IORef.atomicModifyIORef' raudst
+        $ \audst -> (audst {AudioMain.m_fft=Nothing}, audst)
     dispst@Dynamic {..} <- IORef.atomicModifyIORef' rdispst (split $ consume_fft dispconf fft)
 --  printf "ds_ampmax: %3.3f, ds_freqmax: %3.2f, m_ampavg: %.6f, m_fftct: %d\n" ds_ampmax ds_freqmax m_ampavg m_fftct
     -- update screen
