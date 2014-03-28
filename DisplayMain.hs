@@ -111,18 +111,20 @@ split f x = let r = f x in (r, r)
 -- fold a new fft state into the display state
 consume_fft :: DisplayConf -> Maybe (Vector Float) -> DisplayState -> DisplayState
 consume_fft _             Nothing     dispst_        = dispst_
-consume_fft (Static {..}) (Just fft_) (Dynamic {..}) =
+consume_fft (Static {..}) (Just fft__) (Dynamic {..}) =
     Dynamic { ds_freqmax = freqmax
             , ds_ampmax = ampmax
             , ds_ffts = streams
             }
     where
+        -- increase spectrogram contrast
+        fft_ = fmap (^(3::Int)) fft__
         -- update the maximum interesting frequency
         freqmax = maybe (error $ printf "learn_freqmax %f $ fft_=%s" ds_freqmax $ show fft_)
                         id
                         (learn_freqmax ds_freqmax fft_)
         -- limit display to the frequencies which are interesting
-        fft = Vector.take (round freqmax) fft_
+        fft = Vector.take (round freqmax) $ fft_
         -- update the maximum amplitude among frequencies to scale the display vertically
         ampmax = maybe (error $ printf "learn_ampmax %f $ fft=%s" ds_ampmax $ show fft)
                        id
