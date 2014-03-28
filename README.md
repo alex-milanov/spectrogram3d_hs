@@ -1,6 +1,6 @@
 # spectrogram3d_hs
 
-A realtime 3D spectrogram written in Haskell. Takes sound from JACK, and draws a mesh with GPipe.
+A live 3D spectrogram written in Haskell. It takes sound from JACK, and draws a mesh with GPipe. You can use it visualize audio from VLC, iTunes, or even microphone input (whistling is particularly interesting to watch).
 
 There are lots of dependencies. I'll write up a guide through the cabal hell soon. See alse [TODO.md](https://github.com/plredmond/spectogram3d_hs/blob/master/TODO.md).
 
