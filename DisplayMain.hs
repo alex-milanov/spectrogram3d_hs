@@ -146,12 +146,11 @@ learn_ampmax amax_ v = do
     vmax <- Stats.maximum v
     return $ mix (max amax_ vmax) vmu 0.001
 
--- learn the maximum index which is far from the stddev of the vector; decay toward zeno-zero
+-- learn the maximum index which is more than a stddev from 0; decay toward zeno-zero
 learn_freqmax :: Float -> Vector Float -> Maybe Float
 learn_freqmax fmax_ v = do -- fromIntegral $ Vector.length v
-    mu <- Stats.mean v
-    sd <- Stats.stddev_ (Just$Left$Mean mu) v
-    let far = Stats.far (StdDev sd) (Mean mu)
+    sd <- Stats.stddev v
+    let far = Stats.far (StdDev sd) (Mean 0) -- we lie about the mean
         fariv = Vector.findIndices (far 1) v
     Monad.guard (not $ Vector.null fariv)
     let farivmax = fromIntegral $ Vector.last fariv
