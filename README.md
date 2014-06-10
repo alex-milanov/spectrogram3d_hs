@@ -4,8 +4,6 @@ A live 3D spectrogram written in Haskell. It takes sound from JACK, and draws a 
 
 There are lots of dependencies. I'll write up a guide through the cabal hell soon. See alse [TODO.md](https://github.com/plredmond/spectogram3d_hs/blob/master/TODO.md).
 
-*Please excuse the misspelling in this repo's title/url.*
-
 ## FAQts
 
 * Structure
