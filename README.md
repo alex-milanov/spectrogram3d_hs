@@ -64,7 +64,7 @@ done.
 Start it with two numbers (no more, no less!) to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
 
 ```
-$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram
+$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram 1024 256
 Reading two ints.. ["1024","256"]
 Stride: 1024
 Offset: 256
