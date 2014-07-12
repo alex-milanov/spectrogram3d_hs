@@ -50,7 +50,7 @@ popd
 
 Start it without arguments to use the default stride and offset (stride of FFT and offset between start of FFTs).
 
-```
+```sh
 $ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram
 Using defaults..
 Stride: 512
@@ -63,7 +63,7 @@ done.
 
 Start it with two numbers (no more, no less!) to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
 
-```
+```sh
 $ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram 1024 256
 Reading two ints.. ["1024","256"]
 Stride: 1024
