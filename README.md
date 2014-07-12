@@ -16,25 +16,17 @@ cabal install cabal-install-1.18.0.4 # b/c the 1.2x.x.x versions seem borked
 # set your $PATH properly to use ~/.cabal/bin
 ```
 
-#### 2. Build (copypasta to your shell)
+#### 2. Install JACK
+
+You can probably obtain [JACK](http://jackaudio.org/) from your linux distro. If you're using a Mac you'll need [JACKOSX](http://www.jackosx.com/).
+
+#### 3. Build
+
+Read `build.sh` or do:
 
 ```sh
-mkdir spectrogram
-cd spectrogram
-
-git clone https://github.com/tobbebex/GPipe.git
-pushd GPipe
-  git checkout 673aad415e3e3fbf228a302ca14b5f0614d90d6e # GPipe 1.4.3
-  cabal sandbox init
-  cabal install
-popd
-
-git clone https://github.com/plredmond/spectrogram3d_hs.git
-pushd spectrogram3d_hs
-  cabal sandbox init
-  cabal sandbox add-source ../GPipe
-  cabal install
-popd
+wget https://raw.githubusercontent.com/plredmond/spectrogram3d_hs/master/build.sh
+sh -x build.sh
 ```
 
 ## FAQts
@@ -51,7 +43,7 @@ popd
 Start it without arguments to use the default stride and offset (stride of FFT and offset between start of FFTs).
 
 ```sh
-$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram
+$ pkg/bin/spectrogram
 Using defaults..
 Stride: 512
 Offset: 512
@@ -64,7 +56,7 @@ done.
 Start it with two numbers (no more, no less!) to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
 
 ```sh
-$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram 1024 256
+$ pkg/bin/spectrogram 1024 256
 Reading two ints.. ["1024","256"]
 Stride: 1024
 Offset: 256
