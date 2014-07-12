@@ -4,6 +4,39 @@ A live 3D spectrogram written in Haskell. It takes sound from JACK, and draws a 
 
 There are lots of dependencies. I'll write up a guide through the cabal hell soon. See alse [TODO.md](https://github.com/plredmond/spectogram3d_hs/blob/master/TODO.md).
 
+## Build
+
+#### 1. Prep your haskell environment
+
+```sh
+brew install haskell-platform # stable 2013.2.0.0
+
+cabal install cabal-install-1.18.0.4 # b/c the 1.2x.x.x versions seem borked
+
+# set your $PATH properly to use ~/.cabal/bin
+```
+
+#### 2. Build (copypasta to your shell)
+
+```sh
+mkdir spectrogram
+cd spectrogram
+
+git clone https://github.com/tobbebex/GPipe.git
+pushd GPipe
+  git checkout 673aad415e3e3fbf228a302ca14b5f0614d90d6e # GPipe 1.4.3
+  cabal sandbox init
+  cabal install
+popd
+
+git clone https://github.com/plredmond/spectrogram3d_hs.git
+pushd spectrogram3d_hs
+  cabal sandbox init
+  cabal sandbox add-source ../GPipe
+  cabal install
+popd
+```
+
 ## FAQts
 
 * Structure
@@ -18,7 +51,7 @@ There are lots of dependencies. I'll write up a guide through the cabal hell soo
 Start it without arguments to use the default stride and offset (stride of FFT and offset between start of FFTs).
 
 ```
-$ ./dist/build/spectrogram/spectrogram
+$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram
 Using defaults..
 Stride: 512
 Offset: 512
@@ -31,7 +64,7 @@ done.
 Start it with two numbers (no more, no less!) to specify stride and offset. Here we generate a higher-resolution FFT more frequently than the defaults.
 
 ```
-$ ./dist/build/spectrogram/spectrogram 1024 256
+$ spectrogram3d_hs/dist/dist-sandbox-*/build/spectrogram/spectrogram
 Reading two ints.. ["1024","256"]
 Stride: 1024
 Offset: 256
